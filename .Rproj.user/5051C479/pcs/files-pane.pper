@@ -1,0 +1,13 @@
+{
+    "sortOrder": [
+        {
+            "columnIndex": 1,
+            "ascending": false
+        },
+        {
+            "columnIndex": 2,
+            "ascending": true
+        }
+    ],
+    "path": "~/Escritorio/BigData_23-24/plantillas_BigData_2023/trabajo_BigData_equipo/assets"
+}

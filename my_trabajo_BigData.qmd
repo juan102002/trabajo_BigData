@@ -1,0 +1,696 @@
+---
+title: "La vivienda, una mirada a Europa y a España"
+description: |
+  Analizando la evolución del alquiler en los países de Europa y en las comunidades autónomas de España
+author:   
+  - Jorge Moreno Lahiguera (molajor@alumni.uv.es)\n   
+  - Victor Cloquell Perez (viclope@alumni.uv.es)\n
+  - Juan Pablo Endrino (juanpaen@alumni.uv.es)
+date: 2025-12-07                           #--
+categories: [trabajo BigData]      #--
+image: "./imagenes/imagen_01.png"
+title-block-banner: true #- {true, false, "green","#AA0000"}
+title-block-banner-color: "red"    #-"#FFFFFF" 
+toc-depth: 3
+smooth-scroll: true
+format: 
+  html:
+    #backgroundcolor: "#F1F3F4"
+    #embed-resources: true
+    link-external-newwindow: true
+    #css: assets/my_css_file.css   
+    code-fold: true #para que el codigo se pliegue
+    code-summary: "Desplegar codigo"  #para ver eso al hacer clic y desplegar el codigo
+    code-line-numbers: true  #para ver el numero de las lineas en el codigo
+    code-tools: true #para que aparezca la opción de copiar el codigo al portapapeles.
+code-tools: true
+code-link: true
+execute:
+  echo: true #para que el codigo se incluya en el documento final.
+  eval: true #para que el codigo se evalue y se muestren los resultados (tablas, graficas)
+  warning: false #para que no se incluyan avisos, ya que queda feo
+  message: false #para que no se incluyan mensajes, ya que queda feo 
+---
+
+# Introducción
+
+En los últimos años la vivienda, tanto el alquiler como la compra de esta, se ha convertido en una de las principales preocupaciones de los españoles. Esto no es un fenómeno único de nuestro país, la situación es similar en otras partes de Europa y del mundo.
+
+Por esta razón hemos decidido investigar sobre este problema, empezando por observar ciertas variables a nivel continental, usando datos de Eurostat y de la OECD. Para luego continuar analizando la situación en España, con datos del INE.
+
+En este documento, en algunos momentos puntuales también hablaremos sobre detalles del código que usamos para obtener lo que el lector vera.
+
+Primero cargaremos los paquetes necesarios:
+```{r}
+#install.packages("eurostat")
+#install.packages("tidyverse")
+#install.packages("ggplot2")
+#install.packages("gganimate")
+#install.packages("ggthemes")
+#install.packages("gt")
+#install.packages("gtExtras")
+#install.packages("tidyr")
+#install.packages("sf")
+#install.packages("giscoR")
+#install.packages("ragg")
+#install.packages("gifski")
+#install.packages("lubridate")
+#install.packages("DT")
+#install.packages("pjpv.curso.R.2022")
+#install.packages("classInt")
+#install.packages("stringr")
+#install.packages("pxR")
+#install.packages("devtools")
+
+library(pxR)
+library(eurostat)
+library(tidyverse)
+library(ggplot2)
+library(gganimate)
+library(ggthemes)
+library(gt)
+library(gtExtras)
+library(tidyr)
+library(sf)        
+library(giscoR)
+library(ragg)
+
+library(lubridate)
+library(DT)
+devtools::install_github("perezp44/pjpv.curso.R.2022")
+library(classInt)
+library(stringr)
+
+#Usamos esto para solucionar problemas con los gráficos animados
+library(gifski)
+```
+
+
+# [Europa y el precio del alquiler]{style="color: yellow; background-color: blue"}
+  
+Lo sabemos, esto del título es una horterada, pero es para que Pedro vea que le hacemos caso en clase ;)
+
+## ¿Dónde sube más el alquiler y por que?
+Obtenemos el dataset de Eurostat, directamente usando el paquete del mismo nombre. En el dataset tenemos observaciones del cambio del precio del alquiler en el periodo 1996-2024, usando el año 2014 como base. Trabajamos el dataset para quitar países que no nos interesan y otras variables que no nos importan. Posteriormente obtenemos los seis países de la UE en los que más ha subido el precio del alquiler en el mencionado periodo.
+El dataset contiene observaciones sobre un conjunto de `r nrow(df)`. Hay  `r ncol(df)` variables.
+
+```{r}
+#Escogemos los datos de la página de Eurostat
+my_table <- "prc_hicp_aind"
+
+eurostat::label_eurostat_tables(my_table)
+
+#Creamos el dataframe asociado al índice de IPC de Eurostat y filtramos
+df <- eurostat::get_eurostat(my_table, time_format = "raw")   
+
+df_alquileres_index <- df %>%
+                        filter(coicop == "CP041",
+                        !geo %in% c("EU27_2020", "EA19", "EU28", 
+                                    "EA", "EA20","EA19", "US", 
+                                    "XK", "TR", "RS", "AL", "MK", 
+                                    "ME", "UK", "EEA", "EU")) %>%
+                        label_eurostat() %>%
+                        filter(unit == "Annual average index") %>%
+                        dplyr::rename(paises = geo,
+                               año = TIME_PERIOD) %>%
+                        mutate(año = as.numeric(año)) %>%
+                        select(-freq) 
+
+##Top (Los 6 que más han crecido desde 2015 hasta 2024)
+df_alquileres_top_6_2024 <- df_alquileres_index %>%
+                             filter(año == 2024) %>%
+                             slice_max(values, n=6) 
+
+tabla_df_alquileres_top_6_2024 <- df_alquileres_top_6_2024 %>%
+                                   gt() %>% 
+                                   gt_theme_excel() %>% 
+                                   tab_header(title = "Tabla 1: Incremento del precio del alquiler\nen los 6 países que más ha crecido",
+                                               subtitle = "TOP 6") %>% 
+                                   tab_footnote(footnote = "Eurostat 2025")
+
+tabla_df_alquileres_top_6_2024
+```
+---
+
+```{r}
+top_paises <- df_alquileres_top_6_2024$paises
+
+df_top <- df_alquileres_index %>%
+           filter(paises %in% top_paises)
+
+#Gráfico del top
+grafico_top <- ggplot(df_top, 
+                      aes(x = año, y = values, color = paises)) +
+                geom_line(size = 1.4) +
+                labs(title = "Gráfico 1: Incremento del precio del alquiler\n(Base 2015) del TOP 6 Países", 
+                    x = "Año", y = "Porcentaje (Base 2015)",
+                    caption = "Fuente: Eurostat 2025") +
+                scale_x_continuous(breaks = seq(1996, 2024, by = 2)) +
+                scale_y_continuous(breaks = seq(0, 200, by = 25)) +
+                theme_stata() +
+                theme(legend.position = "none", 
+                      axis.text.y = element_text(angle = 0),
+                      axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+                geom_text(aes(label = paises))
+
+grafico_top_animado <- grafico_top + transition_reveal(año) 
+
+animate(grafico_top_animado, 
+        renderer = gifski_renderer())
+```
+
+Los países de Europa del Este han experimentado un crecimiento económico rápido que ha elevado los salarios, pero la oferta de vivienda no ha seguido el ritmo. Además, han tenido las tasas de inflación general más altas de la UE tras la crisis energética (súbida del precio desde 2021). También está la presencia de Irlanda por la escasez crónica de oferta: la alta demanda (impulsada por el sector tecnológico y la inmigración) choca con un mercado inmobiliario que no construye lo suficiente, provocando una de las crisis de alquiler más agudas de Europa occidental. Islandia es un caso particular por el Efecto Airbnb (Turismo masivo): Gran parte del parque de viviendas se ha destinado al alquiler turístico, reduciendo drásticamente la oferta para residentes y disparando los precios, sumado a su muy limitado terreno edificable y su alta inflación.
+
+## ¿Y donde sube menos?
+
+```{r}
+#Nontop (Los 6 que menos han crecido desde 2015 hasta 2024)
+df_alquileres_nontop_6_2024 <- df_alquileres_index %>%
+                                filter(año == 2024) %>%
+                                slice_min(values, n=6)
+
+tabla_df_alquileres_nontop_6_2024 <- df_alquileres_nontop_6_2024 %>%
+                                gt() %>% 
+                                gt_theme_excel() %>% 
+                                tab_header(title = "Tabla 2: Incremento del precio del alquiler\nen los 6 países que menos ha crecido",
+                                           subtitle = "NONTOP 6") %>% 
+                                tab_footnote(footnote = "Eurostat 2025")
+
+tabla_df_alquileres_nontop_6_2024
+```
+
+
+
+```{r}
+#Gráfico del nontop
+nontop_paises <- df_alquileres_nontop_6_2024$paises
+
+df_nontop <- df_alquileres_index %>%
+             filter(unit == "Annual average index",
+                    paises %in% nontop_paises)
+
+grafico_nontop <- ggplot(df_nontop, 
+                         aes(x = año, y = values, color = paises)) +
+                   geom_line(size = 1.4) +
+                   labs(title = "Gráfico 2: Incremento del precio del alquiler\n(Base 2015) en los 6 Países que menos ha crecido", 
+                        x = "Año", y = "Porcentaje (Base 2015)",
+                   caption = "Fuente: Eurostat 2025") +
+                   scale_x_continuous(breaks = seq(1996, 2024, by = 2)) +
+                   scale_y_continuous(breaks = seq(0, 200, by = 25)) +
+                   theme_stata() +
+                   theme(legend.position = "none", 
+                         axis.text.y = element_text(angle = 0),
+                         axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+                   geom_text(aes(label = paises))
+
+grafico_nontop_animado <- grafico_nontop + transition_reveal(año) 
+
+animate(grafico_nontop_animado, 
+        renderer = gifski_renderer())
+```
+
+El grupo de los países con menor incremento en el precio, se puede observar un escenario de estancamiento y corrección post-crisis que contrasta radicalmente con el dinamismo del este de Europa. En este conjunto destaca Grecia como una anomalía bajista, donde los alquileres son nominalmente más bajos que en la década anterior debido al colapso de la demanda interna tras su crisis de deuda, mientras que economías mediterráneas como Italia y Chipre muestran una trayectoria casi plana fruto de un crecimiento económico débil. Por otro lado, la presencia de países con mercados tensos como España o Francia en esta parte baja del ranking responde en gran medida a la metodología del índice HICP, que al medir el stock completo de contratos (incluyendo rentas antiguas y renovaciones limitadas por ley) y no solo los nuevos alquileres de mercado, suaviza la curva de precios, reflejando así una Europa donde la regulación y la inercia contractual han blindado estadísticamente a los inquilinos estables frente a la volatilidad inflacionaria reciente.
+
+## Año a año, ¿donde sube mas el alquiler? (Graficos de barras)
+
+El análisis mediante gráficos nos permitirá obtener otros datos sobre la situación de la vivienda en Europa. A continuación veremos en cada año cuál es el país en el que más ha subido el precio del alquiler con respecto al año anterior.
+
+```{r}
+my_table <- "prc_hicp_aind"
+
+eurostat::label_eurostat_tables(my_table)
+
+df <- eurostat::get_eurostat(my_table, time_format = "raw") 
+
+df_alquileres_anual <- df %>%
+                  filter(coicop == "CP041",
+                         unit == "RCH_A_AVG",
+                  !geo %in% c("EU27_2020", "EA19", "EU28", 
+                     "EA", "EA20","EA19", "US", 
+                     "XK", "TR", "RS", "AL", "MK", 
+                     "ME", "UK", "EEA", "EU")) %>%
+                  dplyr::rename(país = geo,
+                         año = TIME_PERIOD) %>%
+                  select(-freq) 
+
+
+#TOP (Porcentaje del incremento anual del precio del alquiler del páis donde más ha crecido ese año)
+df_top <- df_alquileres_anual %>%
+           group_by(año) %>%
+           slice_max(order_by = values, n = 1) %>%
+           ungroup() %>%
+           arrange(año)
+
+gráfico_barras_TOP <- ggplot(df_top, aes(x = año, y = values, fill = país)) +
+                       geom_col() +
+                       labs(title = "Gráfico 3: Porcentaje del incremento anual del precio\ndel alquiler del páis donde más ha crecido ese año (UE)",
+                            x = "Año", y = "Porcentaje del incremento anual",
+                            caption = "Eurostat 2025") +
+                       theme_solarized() +
+                       geom_text(aes(label = país), angle = 90, hjust = 0) +
+                       scale_y_continuous(breaks = seq(0, 170, by = 12.5)) +
+                       theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+                             legend.position = "none")
+
+gráfico_barras_TOP
+```
+
+La evolución de los precios muestra una clara transición de inestabilidad extrema a madurez de mercado, protagonizada casi exclusivamente por las economías de Europa del Este y los países bálticos. Se distinguen dos grandes etapas: un primer periodo de ajuste agresivo (1996-2008), marcado por la apertura post-soviética y la inflación previa a la entrada en el euro, que provocó subidas desorbitadas como el pico histórico de Bulgaria en 1998 (>150%) o el de Rumanía en 2007; seguido de una segunda etapa de estabilización estructural (2009-2024) tras la crisis financiera, donde las subidas se han moderado drásticamente (situándose habitualmente por debajo del 25%) al haberse completado la convergencia económica de estos países con el resto de la Unión Europea.
+
+## ¿Y dónde menos?
+
+```{r}
+#NONTOP
+df_nontop <- df_alquileres_anual %>%
+  group_by(año) %>%
+  slice_min(order_by = values, n = 1) %>%
+  ungroup() %>%
+  arrange(año)
+
+gráfico_barras_NONTOP <- ggplot(df_nontop, aes(x = año, y = values, fill = país)) +
+                          geom_col() +
+                          labs(title = "Gráfico 4: Porcentaje del incremento anual del precio\ndel alquiler del páis donde menos ha crecido ese año (UE)",
+       x = "Año", y = "Porcentaje del incremento anual",
+                          caption = "Eurostat 2025") +
+                          theme_solarized() +
+                          geom_text(aes(label = país), angle = 90, hjust = 0) +
+                          scale_y_continuous(breaks = seq(-40, 10, by = 5)) +
+                          theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+                          legend.position = "none")
+
+gráfico_barras_NONTOP
+```
+
+Este gráfico traza la historia de las crisis inmobiliarias europeas a través de los descensos de precios, identificando tres fases muy diferenciadas. Primero, una etapa de corrección violenta post-2008, donde las economías bálticas (Estonia y Lituania) sufrieron desplomes masivos de hasta un 30% al estallar sus burbujas de crédito. Segundo, un largo periodo de deflación estructural en el sur (2012-2018), protagonizado casi en exclusiva por Grecia (EL), que encadenó casi una década de caídas constantes debido a su crisis de deuda y austeridad. Finalmente, el gráfico revela una tendencia actual preocupante tras 2021: la desaparición de las bajadas, ya que en los últimos años (2022-2024) las barras vuelven a ser positivas, indicando que hoy en día los precios suben incluso en los mercados más estancados de Europa.
+
+Para una más cómoda comparación:
+
+```{r}
+library(patchwork) #- utiliza el pkg "patchwork" para mostrar los 2 gráficos (p1 y p2) side-by-side
+
+gráfico_barras_TOP_v2 <- ggplot(df_top, aes(x = año, y = values, fill = país)) +
+                       geom_col() +
+                       labs(x = "Año", y = "Porcentaje del incremento anual",
+                            caption = "Eurostat 2025") +
+                       theme_solarized() +
+                       geom_text(aes(label = país), angle = 90, hjust = 0) +
+                       scale_y_continuous(breaks = seq(0, 170, by = 12.5)) +
+                       theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+                             legend.position = "none")
+
+gráfico_barras_NONTOP_v2 <- ggplot(df_nontop, aes(x = año, y = values, fill = país)) +
+                          geom_col() +
+                          labs(x = "Año", y = "Porcentaje del incremento anual",
+                          caption = "Eurostat 2025") +
+                          theme_solarized() +
+                          geom_text(aes(label = país), angle = 90, hjust = 0) +
+                          scale_y_continuous(breaks = seq(-40, 10, by = 5)) +
+                          theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+                          legend.position = "none")
+
+gráfico_barras_TOP_v2 + labs(title = "Gráfico 5: Países donde más y menos ha incrementado\nel precio de alquiler anual") + gráfico_barras_NONTOP_v2 
+```
+
+## Mapa Europa
+
+```{r}
+my_table <- "prc_hicp_aind"
+
+eurostat::label_eurostat_tables(my_table)
+
+df <- eurostat::get_eurostat(my_table, time_format = "raw") 
+
+df_alquileres_anual <- df %>%
+                        filter(coicop == "CP041",
+                               unit == "RCH_A_AVG",
+                        !geo %in% c("EU27_2020", "EA19", "EU28", 
+                                     "EA", "EA20","EA19", "US", 
+                                     "XK", "TR", "RS", "AL", "MK", 
+                                     "ME", "UK", "EEA", "EU")) %>%
+                         rename(país = geo,
+                                año = TIME_PERIOD) %>%
+                         select(-freq) %>%
+                         mutate(año = as.numeric(año))
+
+mapa_europa <- gisco_get_nuts(year = "2021", 
+                              resolution = "20", 
+                              nuts_level = 0) %>%
+                rename(país = NUTS_ID)
+
+mapa_animado_data <- mapa_europa %>%
+                      inner_join(df_alquileres_anual, by = "país") %>%
+                      mutate(incremento_alquileres_grupos = factor(ntile(values, 5),
+                             labels = c("Muy baja", 
+                                        "Baja", 
+                                        "Moderado",
+                                        "Alta", 
+                                        "Muy alta")))
+
+animacion <- ggplot(mapa_animado_data) +
+              geom_sf(aes(fill = incremento_alquileres_grupos), 
+                      color = "white", 
+                      size = 0.1) +
+              scale_fill_viridis_d(option = "magma", direction = -1, 
+                       name = "Incremento del precio del alquiler (%)") + 
+              theme_void() +
+              coord_sf(xlim = c(-25, 45), ylim = c(34, 72)) +
+              labs(title = "Mapa 1: Evolución del Incremento del alquiler entre 1996-2024 en la UE",
+                   subtitle = "Año: {current_frame}",
+                   caption = "Eurostat 2025") +
+              transition_manual(año) +
+              ease_aes("linear") 
+
+animate(animacion, renderer = gifski_renderer(), 
+        duration = 35, 
+        fps = 25, 
+        width = 1000,
+        height = 600,
+        units = "px",
+        res = 150)
+```
+
+
+La evolución del incremento anual del precio del alquiler en la Unión Europea durante el periodo 1996-2024 muestra una trayectoria de encarecimiento progresivo, caracterizada por una heterogeneidad geográfica marcada y una aceleración reciente. Mientras que en las primeras décadas se observan tasas de variación moderadas y estables en gran parte de Europa Occidental, la animación revela cómo, tras la crisis financiera y especialmente en el periodo post-pandemia (2021-2024), la intensidad de las subidas se dispara. Los países de Europa del Este y los Estados Bálticos (Estonia, Lituania) tienden a ocupar frecuentemente las categorías de crecimiento "Muy alta" (colores más oscuros en tu escala magma) debido a un efecto de convergencia económica y alta inflación reciente, mientras que mercados más regulados como Alemania o Francia suelen mostrar un comportamiento más contenido, aunque con una tendencia alcista generalizada en los últimos fotogramas debido a la presión inflacionaria global.
+
+## OECD Boxplot
+
+Cambiamos ahora de fuente. Haciendo uso de los datos de la OECD y mediante un diagrama de cajas observamos la dinámica de la inflación de los alquileres (el ritmo al que suben los precios anualmente), revelando un comportamiento cíclico dramático. Tras dos décadas de relativa estabilidad y una fase de enfriamiento notable entre 2010 y 2020, donde las subidas anuales se moderaron hasta caer cerca del 1% de mediana, se observa una ruptura estructural a partir de 2021. En los últimos tres años (2022-2024), la tendencia se invierte bruscamente con un ascenso vertical, llevando la mediana de incremento anual por encima del 4%, niveles inéditos en la serie histórica. Además, el alargamiento vertical de las cajas en este último periodo indica una mayor volatilidad y disparidad: mientras antes los países se comportaban de forma homogénea, ahora las diferencias en la intensidad de las subidas entre unos mercados y otros son extremas. 
+
+```{r}
+url_ocde <- "https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_PRICES@DF_PRICES_ALL,1.0/CAN+AUS+BEL+FRA+DEU+ITA+JPN+NLD+ESP+CHE+SWE+GBR+USA+OECD+EU27_2020.A.N.CPI.PA.CP041.N.?startPeriod=1996&endPeriod=2024&dimensionAtObservation=AllDimensions&format=csvfilewithlabels"
+
+#Creamos el archivo y descargamos los datos
+dir.create("datos")
+
+ruta_ocde <- "./datos/alquileres_ocde_anual.csv"
+
+curl::curl_download(url_ocde, ruta_ocde) 
+
+alquileres_ocde <- read_csv(ruta_ocde)
+
+#Filtramos los datos
+
+alquileres_ocde_anual <- alquileres_ocde %>%
+                          select(Measure, BASE_PER, EXPENDITURE, Expenditure,                                         `Reference area`, TIME_PERIOD, OBS_VALUE) %>%
+                          mutate(año = TIME_PERIOD,
+                                 values = OBS_VALUE,
+                                 país = `Reference area`) 
+#Creamos el gráfico
+gráfico <- ggplot(alquileres_ocde_anual, aes(x = año,  y = values)) +
+      geom_boxplot(aes(group = año, fill = as.factor(año)), outlier.shape = 8) + 
+      geom_jitter(width = 0.15, alpha = 1/4, color = "brown") +
+      labs(title = "Gráfico 6: Diagrama de cajas del inncremento anual del\nprecio del alquiler G-12", 
+           x = "Año", y = "Porcentaje",
+           caption = "Fuente: OCDE 2025") +
+      theme_solarized() + 
+      stat_summary(fun = mean, geom = "line", color = "black", size = 1.2) +               scale_x_continuous(breaks = seq(1996, 2024, by = 1)) +
+      theme(axis.text.x = element_text(angle = 90),
+            legend.position = "none")
+
+gráfico 
+```
+
+
+## OECD Animación
+```{r}
+url_ocde <- "https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_PRICES@DF_PRICES_ALL,1.0/CAN+AUS+BEL+FRA+DEU+ITA+JPN+NLD+ESP+CHE+SWE+GBR+USA+OECD+EU27_2020.A.N.CPI.IX.CP041.N.?startPeriod=1996&endPeriod=2024&dimensionAtObservation=AllDimensions&format=csvfilewithlabels"
+
+#Creamos el archivo y descargamos los datos
+dir.create("datos")
+
+ruta_ocde <- "./datos/alquileres_ocde.csv"
+
+curl::curl_download(url_ocde, ruta_ocde) 
+
+alquileres_ocde <- read_csv(ruta_ocde)
+
+#Filtramos los datos
+alquileres_ocde <- alquileres_ocde %>%
+                   select(Measure, BASE_PER, EXPENDITURE, Expenditure,                                         `Reference area`, TIME_PERIOD, OBS_VALUE) %>%
+                   mutate(año = TIME_PERIOD,
+                          values = OBS_VALUE,
+                          país = `Reference area`)
+  
+#Creamos el gráfico 
+gráfico <- ggplot(alquileres_ocde, aes(x = año, y = values, color = país)) +
+            geom_line(size = 1.4) +
+            labs(title = "Gráfico 7: Incremento del precio del alquiler (Base 2015) G-12", 
+                  x = "Año", y = "Porcentaje (Base 2015)",
+                 caption = "Fuente: OCDE 2025") +
+            scale_x_continuous(breaks = seq(1996, 2024, by = 2)) +
+            scale_y_continuous(breaks = seq(50, 150, by = 12.5),
+                               limits = c(50, 150),
+                               expand = c(0, 0)) +
+            theme_stata() +
+            theme(legend.position = "none",
+                  axis.text.x = element_text(angle = 90, vjust = 0.5),
+                  axis.text.y = element_text(angle = 0)) +
+            geom_text(aes(label = país))
+  
+#Animámos el gráfico
+gráfico_animado <- gráfico + transition_reveal(año)+
+  enter_fade() + 
+  exit_fade()
+
+gráfico_animado
+```
+
+El gráfico evidencia una tendencia alcista estructural y sostenida en el precio de los alquileres para las principales economías de la OCDE entre 1996 y 2024. Tomando 2015 como año base (índice 100), se observa cómo la totalidad de los países analizados parten de niveles inferiores (cercanos a los 50-60 puntos) a mediados de los noventa y experimentan un crecimiento constante e ininterrumpido a lo largo de las tres décadas. Aunque la pendiente varía según el país —reflejando distintas presiones inflacionarias locales—, la imagen general confirma un encarecimiento progresivo y universal del acceso a la vivienda en alquiler en el bloque occidental, situándose los valores actuales muy por encima de los registros históricos.
+
+# [España y el precio del alquiler]{style="color: yellow; background-color: red"}
+
+Después de entender un poco la situación en Europa, nos acercamos a lo que más nos concierne, nuestro país, España. Hacemos ciertas modificaciones y entonces podremos empezar a trabajar con los datos.
+
+```{r}
+#| label: P error 1
+#Importamos los datos
+
+my_url <- "https://www.ine.es/jaxiT3/files/t/es/px/50914.px?nocab=1"
+
+fs::dir_create("datos")
+
+my_destino <- "./datos/50914.px"
+
+curl::curl_download(my_url, my_destino)
+
+#Obtenemos el DataFrame completo
+
+df <- pxR::read.px(my_destino) %>% as_tibble()
+
+#Filtramos el df y nos quedamos con el subgrupo y el tipo de dato a estudiar. Tambien quitamos los NA de la columna value
+
+names(df)
+nombres_actuales <- names(df)
+nombres_actuales[4] <- "CCAA"
+names(df) <- nombres_actuales
+
+
+df_VIVIENDA <- df %>% 
+  filter(Subgrupos == "041 Alquiler de vivienda", Tipo.de.dato == "Variación anual")  %>%
+  filter(!is.na(value)) 
+  
+
+#Cambiamos el formato de la fecha con el paquete lubridate
+
+df_VIVIENDA_Fechas <- df_VIVIENDA %>%
+    arrange(CCAA, Periodo) %>%
+    mutate(Fecha_Base = gsub("M", "-", Periodo),
+    Fecha_Completa = paste0(Fecha_Base, "-01"),
+    Periodo_Fecha = ymd(Fecha_Completa)) %>%
+    select(-Fecha_Base, -Fecha_Completa,-Periodo)
+
+df__VIVIENDA <- df_VIVIENDA_Fechas %>%
+  filter(month(Periodo_Fecha) == 1) %>%
+  arrange(Periodo_Fecha) %>%
+  mutate(Periodo_Fecha = as.Date(Periodo_Fecha, format = "%Y-%m-%d"))
+
+#Obtenemos el data frame final "bonito" con el que trabajar
+
+df_FINAL_VIVIENDA <- df__VIVIENDA %>%
+  select(-Subgrupos, -Tipo.de.dato) %>%
+  dplyr::rename(var_anual_precio_alquiler = value)
+
+str(df_FINAL_VIVIENDA)
+```
+
+Para ver cómo ha evolucionado la variación anual del precio del alquiler NACIONAL desde 2002 a 2025 crearemos un gráfico. Además este nos servira como gráfico introductorio para ver los datos que trataremos en esta sección.
+
+```{r}
+#| label: P error 2
+df_vivienda_nacional <- df_FINAL_VIVIENDA %>% filter(CCAA == "Nacional")
+
+p1 <- ggplot(df_vivienda_nacional, aes(x = Periodo_Fecha, y = var_anual_precio_alquiler)) +
+  geom_line(aes(color = "Nacional"), linewidth = 0.8, linetype = "dashed") +
+  geom_point() +
+  scale_color_manual(values = c("Nacional" = "#004488")) +
+  labs(title = "Gráfico 8: Evolución de la variación anual del precio del alquiler\na nivel NACIONAL",
+       subtitle = "Periodo comprendido entre 2002-2025",
+       caption = "Fuente: INE",
+       x = "Periodo (años)",
+       y = "Variación anual (%)",
+       color = "Región") + 
+  scale_x_date(date_breaks = "2 year", date_labels = "%Y") 
+
+p1
+```
+El Gráfico 8 evidencia una marcada volatilidad en el crecimiento anual de los precios del alquiler entre 2002 y 2025. Tras registrar tasas superiores al 4% hasta 2008, la variación cayó drásticamente, llegando a ser negativa en el período 2014-2016. Desde ese mínimo, se observa una clara recuperación y una aceleración post-2022 que sitúa la variación proyectada para 2025 cerca del 2.5%.
+
+## ¿Donde sube más el alquiler?
+
+```{r}
+#| label: P error 3
+df_vivienda_promedios_maxs <- df_FINAL_VIVIENDA %>% 
+                         group_by(CCAA) %>%
+                         summarise(media_var_anual = mean(var_anual_precio_alquiler))%>%
+                         ungroup() %>%
+                         slice_max(media_var_anual, n = 5)
+                      
+p2 <- ggplot(df_vivienda_promedios_maxs, aes(x = forcats::fct_reorder(CCAA, media_var_anual), y = media_var_anual)) +
+  geom_col(fill = "lightblue") +
+  coord_flip() +
+  labs(title = "Gráfico 9: Las 5 comunidades con una mayor variación\nanual media del precio de alquiler",
+       subtitle = "Periodo comprendido entre 2002-2025",
+       caption = "Fuente: INE",
+       x = "Comunidades Autónomas",
+       y = "Variación anual media (%)")
+p2
+```
+
+El Gráfico 9 identifica las 5 comunidades autónomas con la mayor variación anual media en el precio del alquiler durante el periodo 2002-2025. Liderando la lista se encuentran las Islas Baleares, seguidas muy de cerca por Cataluña, ambas con una variación media superior al 2.1%. Las comunidades de Aragón, Comunidad de Madrid y País Vasco cierran el top 5, manteniendo también variaciones medias anuales por encima del 2.0% para todo el período. Se muestra en un plot de barras con las coordenas invertidas y con el paquete forcats utilizamos la funcion fct_reorder para ordenar de mayor a menor
+
+Vemos la evolución de las 5 comunidades que han experimentado una mayor variación anual media del precio de alquiler durante los periodos 2002-2025. Primero hacemos el gráfico de lineas y luego con el paquete gganimate lo hacemos animado. Se puede ver una disminución de la variación anual en las 5 CCAA en el año 2010 debido a la crisis inmobiliaria.
+
+```{r}
+#| label: P error 4
+df_vivienda_maxs <- df_FINAL_VIVIENDA %>% 
+                    filter(CCAA %in% 
+                    c("04 Balears, Illes","09 Cataluña","02 Aragón","13 Madrid, Comunidad de","16 País Vasco"))
+
+p4 <-  ggplot(df_vivienda_maxs, aes(x = Periodo_Fecha, y = var_anual_precio_alquiler, color = CCAA)) +
+       geom_line() +
+       labs(title = "Gráfico 10: Evolución de la variación anual del precio del alquiler\nde las 5 comunidades",
+        subtitle = "Periodo comprendido entre 2002-2025",
+        caption = "Fuente: INE",
+        x = "Periodo (años)",
+        y = "Variación anual (%)",
+        color = "Comunidades Autónomas") 
+
+grafico_ani_top5 <- p4 +
+  transition_reveal(Periodo_Fecha) +  
+  enter_fade() +
+  exit_fade()
+
+grafico_ani_top5
+```
+
+El Gráfico 10 muestra que, aunque las 5 comunidades comenzaron el periodo 2002-2025 con tasas de crecimiento anual superiores al 4%, todas experimentaron una fuerte y simultánea caída hasta el entorno de 2014-2016, llegando incluso a tasas negativas. A partir de 2016, las variaciones se recuperaron y fluctuaron alrededor del 1% al 2.5%, con las Islas Baleares liderando el crecimiento en varios puntos y la Comunidad de Madrid mostrando una menor variación en el último periodo. En general, se observa una alta correlación en el ciclo de precios entre estas cinco comunidades.
+
+## ¿Donde baja más el alquiler?
+
+Ahora, buscamos lo contrario, qué 8 comunidades han experimentado una menor variación anual promedio del precio de alquiler en el periodo 2002-2025.En este hacemos lo mismo pero con las 8 comunidades con menor variación anual media. Aquí ningún valor supera el 1.75% de variación media y con el condicional ifelse destacamos que la comunidad que menos ha variado es Navarra. También utilizamos la función fct_reorder para ordenar de mayor a menor y quitamos la leyenda. El resto de comunidades de este grupo, incluyendo Melilla y Asturias, se mantienen en un rango muy estrecho de variaciones, confirmando que estas son las regiones donde el alquiler se ha moderado más.
+
+```{r}
+df_vivienda_promedios_mins <- df_FINAL_VIVIENDA %>% 
+  group_by(CCAA) %>%
+  summarise(media_var_anual = mean(var_anual_precio_alquiler))%>%
+  ungroup() %>%
+  slice_min(media_var_anual, n = 8)
+
+p3 <- ggplot(df_vivienda_promedios_mins, 
+      aes(x = forcats::fct_reorder(CCAA, media_var_anual), y = media_var_anual, 
+      fill = ifelse (CCAA == "15 Navarra, Comunidad Foral de", "darkred", "lightblue"))) +
+      geom_col() +
+      coord_flip() +
+      labs(title = "Gráfico 11: Las 5 comunidades que han experimentado\nuna menor variación anual media del precio de alquiler",
+       subtitle = "Periodo comprendido entre 2002-2025",
+       caption = "Fuente INE",
+       x = "Comunidades Autónomas",
+       y = "Variación anual media (%)") +
+      theme(legend.position = "none")
+p3
+```
+
+Mostramos los datos en una tabla con el paquete DT
+Utilizamos las opciones para dejarla mas limpia y la función formatRound para limitar la columna media_var_anual a 2 decimales
+
+```{r}
+DT::datatable(df_vivienda_promedios_mins,
+  options = list(dom = "t", columnDefs = list(list(targets = "_all", className = "dt-center"))),
+  caption = "Tabla 3: Las 8 comunidades han experimentado una menor variación anual promedio del precio de alquiler") %>% 
+  formatRound("media_var_anual", 2) 
+```
+
+## Mapa de coropletas de la variación anual promedio del precio de alquiler del periodo 2002-2025
+
+```{r}
+#Obtenemos el mapa del paquete del curso 
+
+df_mapa <- pjpv.curso.R.2022::LAU2_prov_2020_canarias
+
+#Primero agregamos provincias para obtener geometrías para las CCAA (script)
+
+ccaa <- df_mapa %>% 
+  group_by(ine_ccaa, ine_ccaa.n, ine_ccaa.n.pjp) %>% 
+  summarise() %>% 
+  ungroup()
+
+#Modificamos nuestro dataframe creando la media de todas las CCAAs. También creamos la columna común
+
+df_vivienda_promedios <- df_FINAL_VIVIENDA %>% 
+  group_by(CCAA) %>%
+  summarise(media_var_anual = mean(var_anual_precio_alquiler))%>%
+  filter(CCAA != "Nacional") %>%
+  ungroup()%>%
+  mutate( ine_ccaa = str_pad( string = row_number(), 
+    width = 2,            
+    pad = "0",           
+    side = "left"), 
+    .before = CCAA)
+
+#Con la función left_join creamos nuestro dataframe preparado para hacer el plot de coropletas
+
+df_mapa <- left_join(ccaa, df_vivienda_promedios, by = "ine_ccaa") %>%
+           select(ine_ccaa,ine_ccaa.n,geometry,media_var_anual)
+
+#Con print podemos ver la estructura del df en la consola
+
+print(df_mapa)
+
+#Creamos el dataframe con los cuartiles 
+
+df_mapa_ntiles <- df_mapa %>%
+   mutate(CLASE_COROPLETAS_NTILE = ntile(media_var_anual, 4)) %>%
+   mutate(
+    CLASE_COROPLETAS_NTILE = case_when(
+      CLASE_COROPLETAS_NTILE == 1 ~ "Cuartil 1 - Variación Baja",
+      CLASE_COROPLETAS_NTILE == 2 ~ "Cuartil 2 - Variación Media-Baja",
+      CLASE_COROPLETAS_NTILE == 3 ~ "Cuartil 3 - Variación Media-Alta",
+      CLASE_COROPLETAS_NTILE == 4 ~ "Cuartil 4 - Variación Alta"))
+ 
+#Mapeamos
+
+ggplot(data = df_mapa_ntiles) +
+  geom_sf(aes(fill = CLASE_COROPLETAS_NTILE),
+          color = "Black",
+          linewidth = 0.3) +
+  scale_fill_brewer(palette = "Blues",
+          name = "Variación Anual Media\n(Clasificación por Cuartiles)") +
+  labs(title = "Mapa 2: Variación Anual Media del precio del alquiler por CCAA",
+          subtitle = "Promedio obtenido de 2002-2025 (Expresado en variación porcentual)",
+          caption = "Fuente: Instituto Nacional de Estadística") +
+  theme_void()
+```
+
+En el Mapa 2 se observa la variación media anual del alquiler (2002-2025), muestra una fuerte dualidad territorial en España. Las subidas más altas (Cuartil 4) se concentran de forma clara en el Mediterráneo, lideradas por Cataluña y las Islas Baleares. La Comunidad de Madrid y la Comunidad Valenciana se sitúan en el cuartil de variación media-alta (Cuartil 3). En contraste, las regiones de la mitad oeste (Galicia, Extremadura, Castilla y León) presentan la variación más baja (Cuartil 1). El patrón subraya una mayor presión de la demanda en zonas costeras y en los principales centros económicos del país.
+
+<br>
+
+### Información sobre la sesión
+
+Abajo muestro mi entorno de trabajo y paquetes utilizados
+
+```{r}
+#| echo: false
+sessioninfo::session_info() %>% 
+  details::details(summary = 'current session info') 
+```

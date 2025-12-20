@@ -1,0 +1,125 @@
+---
+title: "La vivienda, una mirada a Europa y a España"
+description: |
+  Analizando la evolución del alquiler en los paises de Europa y en las comunidades autonomas de España
+author:   
+  - Jorge Moreno Lahiguera (molajor@alumni.uv.es)\n   
+  - Victor Cloquell Perez (viclope@alumni.uv.es)\n
+  - Juan Pablo Endrino (juanpaen@alumni.uv.es)
+date: 2025-12-07                           #--
+categories: [trabajo BigData]      #--
+image: "./imagenes/imagen_01.png"
+title-block-banner: true #- {true, false, "green","#AA0000"}
+title-block-banner-color: "red"    #-"#FFFFFF" 
+toc-depth: 3
+smooth-scroll: true
+format: 
+  html:
+    #backgroundcolor: "#F1F3F4"
+    #embed-resources: true
+    link-external-newwindow: true
+    #css: assets/my_css_file.css   #- CUIDADO!!!!
+    code-fold: true #para que el codigo se pliegue
+    code-summary: "Desplegar codigo"  #para ver eso al hacer clic y desplegar el codigo
+    code-line-numbers: true  #para ver el numero de las lineas en el codgio
+    code-tools: true #para que aparezca la opción de copiar el codigo al portapapeles.
+code-tools: true
+code-link: true
+execute:
+  echo: true #para que el codigo no se incluya en el documento final. IMPORTANTE, a lo mejor hay que cambiar esto.
+  eval: true #para que el codigo se evalue y se muestren los resultados (tablas, graficas)
+  warning: false #para que no se incluyan avisos, ya que queda feo
+  message: false #para que no se incluyan mensajes, ya que queda feo 
+---
+
+
+# Intro 
+
+Vamos a utilizar datos del paquete `palmerpenguins`. El repo del paquete en CRAN está [aquí](https://cran.r-project.org/web/packages/palmerpenguins/index.html), el repo de Github está [aquí](https://github.com/allisonhorst/palmerpenguins) y la página web del paquete está [aquí](https://allisonhorst.github.io/palmerpenguins/).
+
+Los datos se pueden cargar en la memoria de de R/RStudio de esta forma:
+
+```{r}
+# install.packages("palmerpenguins")
+library(palmerpenguins)
+df <- palmerpenguins::penguins
+```
+
+
+El dataset contiene observaciones sobre un conjunto de `r nrow(df)` pingüinos de 3 especies. Hay  `r ncol(df)` variables.
+
+---
+
+# [Europa]{style="color: yellow; background-color: blue"}
+  
+Vamos [a ver]{style="color: yellow; background-color: blue"} una foto [de un pingüinos]{.eu}
+
+```{r}
+#| echo: false
+my_url <- "https://upload.wikimedia.org/wikipedia/commons/a/a9/Ping%C3%BCinos.JPG?20090406212143"
+
+```
+
+
+![Un pingüino chulo](https://www.elconfidencial.com/cultura/2023-10-27/edificios-feos-espana_3762350)
+
+---
+
+Sí, lo pingüinos molan, así que vamos a poner otra foto de pingüinos que tenemos en nuestro PC pero la vamos a poner en el margen:
+
+::: {.column-margin}
+
+![](./imagenes/imagen_01.png){fig-align="center"}
+
+:::
+
+---
+
+## Tabla
+
+
+Bueno pues vamos a hacer algún gráfico, pero claro antes he de cargar los paquetes
+
+```{r}
+
+```
+
+
+Arreglo los datos
+
+```{r}
+
+```
+
+---
+
+## Primer grafico
+
+
+```{r}
+#- primer gráfico
+
+```
+
+---
+
+### Segundo
+
+```{r}
+#- segundo gráfico
+
+```
+
+---
+
+<br>
+
+### Información sobre la sesión
+
+Abajo muestro mi entorno de trabajo y paquetes utilizados
+
+```{r}
+#| echo: false
+sessioninfo::session_info() %>% 
+  details::details(summary = 'current session info') 
+```
